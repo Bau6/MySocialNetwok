@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: social_network_postgres
+    environment:
+      POSTGRES_DB: social_network
+      POSTGRES_USER: social_user
+      POSTGRES_PASSWORD: social_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - social_network_network
+
+  backend:
+    build: ./backend
+    container_name: social_network_backend
+    depends_on:
+      - postgres
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/social_network
+      SPRING_DATASOURCE_USERNAME: social_user
+      SPRING_DATASOURCE_PASSWORD: social_pass
+    ports:
+      - "8080:8080"
+    networks:
+      - social_network_network
+
+networks:
+  social_network_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
