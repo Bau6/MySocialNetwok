@@ -7,7 +7,6 @@ import com.socialnetwork.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,7 +15,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 public class AuthController {
-
     private final AuthService authService;
     private final UserService userService;
 

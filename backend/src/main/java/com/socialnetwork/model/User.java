@@ -20,15 +20,15 @@ public class User {
     @Column(unique = true, nullable = false)
     private String username;
 
+    @Column(unique = true, nullable = false)
+    private String phone;
+
     @Column(nullable = false)
     @JsonIgnore
     private String password;
 
-    @Column(unique = true, nullable = false)
+    // email не обязателен
     private String email;
-
-    @Column(columnDefinition = "TEXT")
-    private String publicKey;
 
     @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL)
     @JsonIgnore

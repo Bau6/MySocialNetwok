@@ -12,16 +12,16 @@ import java.util.ArrayList;
 @Service
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
-
     private final UserRepository userRepository;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
-
+    public UserDetails loadUserByUsername(String login) throws UsernameNotFoundException {
+        // login может быть username или phone
+        User user = userRepository.findByUsername(login)
+                .or(() -> userRepository.findByPhone(login))
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with login: " + login));
         return new org.springframework.security.core.userdetails.User(
-                user.getUsername(),
+                user.getUsername(), // используем username как principal
                 user.getPassword(),
                 new ArrayList<>()
         );

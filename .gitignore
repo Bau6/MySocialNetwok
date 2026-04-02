@@ -1,0 +1,9 @@
+# Логи
+*.log
+
+# Зависимости фронтенда
+frontend/node_modules/
+
+# Файлы сборки
+dist/
+build/

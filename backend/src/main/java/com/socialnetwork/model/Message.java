@@ -31,4 +31,7 @@ public class Message {
     private LocalDateTime timestamp;
 
     private boolean read;
+
+    @Column(name = "chat_key_id", nullable = false)
+    private Long chatKeyId;
 }
