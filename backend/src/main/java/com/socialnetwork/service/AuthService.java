@@ -13,11 +13,17 @@ import org.springframework.stereotype.Service;
 public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
+    private final UserService userService;
 
     public String login(LoginRequest request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getLogin(), request.getPassword())
         );
+
+        // Обновляем время последнего входа
+        String username = authentication.getName();
+        userService.updateLastSeen(username);
+
         return tokenProvider.generateToken(authentication);
     }
 }

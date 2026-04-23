@@ -5,14 +5,18 @@ import com.socialnetwork.model.ChatKey;
 import com.socialnetwork.model.User;
 import com.socialnetwork.repository.ChatKeyRepository;
 import com.socialnetwork.repository.UserRepository;
+import com.socialnetwork.utils.DataNormalizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,59 +26,92 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     public User register(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
+        // Нормализация данных
+        String normalizedUsername = DataNormalizer.normalizeUsername(request.getUsername());
+        String normalizedPhone = DataNormalizer.normalizePhone(request.getPhone());
+        String normalizedEmail = request.getEmail() != null ? DataNormalizer.normalizeEmail(request.getEmail()) : null;
+
+        // Валидация
+        if (normalizedUsername == null || normalizedUsername.trim().isEmpty()) {
+            throw new RuntimeException("Имя пользователя не может быть пустым");
+        }
+        if (normalizedPhone == null) {
+            throw new RuntimeException("Номер телефона не может быть пустым");
+        }
+        if (request.getPassword() == null || request.getPassword().isEmpty()) {
+            throw new RuntimeException("Пароль не может быть пустым");
+        }
+
+        if (normalizedUsername.length() < 3) {
+            throw new RuntimeException("Имя пользователя должно содержать минимум 3 символа");
+        }
+        if (request.getPassword().length() < 6) {
+            throw new RuntimeException("Пароль должен содержать минимум 6 символов");
+        }
+
+        if (userRepository.existsByUsername(normalizedUsername)) {
             throw new RuntimeException("Username already exists");
         }
-        if (userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsByPhone(normalizedPhone)) {
             throw new RuntimeException("Phone already exists");
+        }
+        if (normalizedEmail != null && userRepository.existsByEmail(normalizedEmail)) {
+            throw new RuntimeException("Email already exists");
         }
 
         User user = new User();
-        user.setUsername(request.getUsername());
-        user.setPhone(request.getPhone());
+        user.setUsername(normalizedUsername);
+        user.setPhone(normalizedPhone);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setEmail(request.getEmail()); // может быть null
+        user.setEmail(normalizedEmail);
+        user.setLastSeen(LocalDateTime.now());
+        user.setOnline(true);
 
         return userRepository.save(user);
     }
 
     public User findByUsername(String username) {
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        String normalizedUsername = DataNormalizer.normalizeUsername(username);
+        return userRepository.findByUsername(normalizedUsername)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
     }
 
     public User findByPhone(String phone) {
-        return userRepository.findByPhone(phone)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        String normalizedPhone = DataNormalizer.normalizePhone(phone);
+        return userRepository.findByPhone(normalizedPhone)
+                .orElseThrow(() -> new IllegalArgumentException("User not found with phone: " + phone));
     }
 
     public User findByLogin(String login) {
-        // сначала ищем по username, потом по phone
-        Optional<User> byUsername = userRepository.findByUsername(login);
+        String normalizedUsername = DataNormalizer.normalizeUsername(login);
+        Optional<User> byUsername = userRepository.findByUsername(normalizedUsername);
         if (byUsername.isPresent()) return byUsername.get();
-        return userRepository.findByPhone(login)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String normalizedPhone = DataNormalizer.normalizePhone(login);
+        return userRepository.findByPhone(normalizedPhone)
+                .orElseThrow(() -> new IllegalArgumentException("User not found with login: " + login));
     }
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
     }
 
+    // ИСПРАВЛЕННЫЙ МЕТОД - поиск по частичному совпадению
     public List<User> searchUsers(String query) {
         if (query == null || query.trim().isEmpty()) {
-            return List.of(); // пустой поиск
+            return new ArrayList<>();
         }
-        // ищем по username или phone (точное совпадение)
-        Optional<User> byUsername = userRepository.findByUsername(query);
-        if (byUsername.isPresent()) return List.of(byUsername.get());
 
-        Optional<User> byPhone = userRepository.findByPhone(query);
-        if (byPhone.isPresent()) return List.of(byPhone.get());
+        String normalizedQuery = query.trim().toLowerCase();
+        String phoneQuery = DataNormalizer.normalizePhone(query);
 
-        return List.of();
+        // Поиск по частичному совпадению во всех полях
+        List<User> results = userRepository.searchUsers(normalizedQuery, phoneQuery, normalizedQuery);
+
+        // Удаляем дубликаты (если пользователь найден по нескольким критериям)
+        return results.stream().distinct().collect(Collectors.toList());
     }
 
-    // Пользователи, с которыми есть чаты
     public List<User> getUsersWithChats(String currentUsername) {
         User current = findByUsername(currentUsername);
         List<ChatKey> keys = chatKeyRepository.findAllByUser1OrUser2(current, current);
@@ -88,5 +125,44 @@ public class UserService {
             }
         }
         return new ArrayList<>(usersWithChats);
+    }
+
+    public boolean isUserOnline(String username) {
+        try {
+            User user = findByUsername(username);
+            if (user.getLastSeen() != null) {
+                return user.getLastSeen().isAfter(LocalDateTime.now().minusMinutes(5));
+            }
+            return user.isOnline();
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public void updateLastSeen(String username) {
+        try {
+            User user = findByUsername(username);
+            user.setLastSeen(LocalDateTime.now());
+            user.setOnline(true);
+            userRepository.save(user);
+        } catch (IllegalArgumentException e) {
+            System.err.println("Failed to update last seen for user: " + username);
+        }
+    }
+
+    public void setUserOffline(String username) {
+        try {
+            User user = findByUsername(username);
+            user.setOnline(false);
+            user.setLastSeen(LocalDateTime.now());
+            userRepository.save(user);
+        } catch (IllegalArgumentException e) {
+            System.err.println("Failed to set user offline: " + username);
+        }
+    }
+
+    public Optional<User> findUserByUsername(String username) {
+        String normalizedUsername = DataNormalizer.normalizeUsername(username);
+        return userRepository.findByUsername(normalizedUsername);
     }
 }

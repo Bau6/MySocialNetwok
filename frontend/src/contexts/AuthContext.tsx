@@ -9,8 +9,8 @@ interface User {
 interface AuthContextType {
     user: User | null;
     isLoading: boolean;
-    login: (login: string, password: string) => Promise<void>;
-    register: (username: string, phone: string, password: string, email?: string) => Promise<void>;
+    login: (login: string, password: string) => Promise<{ success: boolean; error?: string }>;
+    register: (username: string, phone: string, password: string, email?: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
     isAuthenticated: boolean;
 }
@@ -31,30 +31,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const token = api.getToken();
         const savedUser = localStorage.getItem('user');
         if (token && savedUser) {
-            setUser(JSON.parse(savedUser));
+            try {
+                setUser(JSON.parse(savedUser));
+            } catch (e) {
+                console.error('Failed to parse user data', e);
+                localStorage.removeItem('user');
+            }
         }
         setIsLoading(false);
     }, []);
 
-    const login = async (login: string, password: string) => {
-        const { token } = await api.login(login, password);
-        api.setToken(token);
-        const userData = { username: login }; // username будет извлечён из токена? упростим: можно декодировать, но для простоты сохраним login
-        localStorage.setItem('user', JSON.stringify({ username: login }));
-        setUser({ username: login });
-        toast.success('Welcome back!');
+    const register = async (username: string, phone: string, password: string, email?: string): Promise<{ success: boolean; error?: string }> => {
+        // Фронтенд валидация
+        if (!username || username.trim().length < 3) {
+            const error = 'Имя пользователя должно содержать минимум 3 символа';
+            toast.error(error);
+            return { success: false, error };
+        }
+        if (!phone || !phone.match(/^\+?[0-9]{10,15}$/)) {
+            const error = 'Введите корректный номер телефона (например, +79991234567)';
+            toast.error(error);
+            return { success: false, error };
+        }
+        if (!password || password.length < 6) {
+            const error = 'Пароль должен содержать минимум 6 символов';
+            toast.error(error);
+            return { success: false, error };
+        }
+
+        try {
+            const response = await api.register({ username, phone, password, email });
+            toast.success(response.message || 'Регистрация успешна! Теперь войдите в систему.');
+            return { success: true };
+        } catch (error: any) {
+            let errorMessage = 'Ошибка регистрации';
+            if (error.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            }
+            toast.error(errorMessage);
+            return { success: false, error: errorMessage };
+        }
     };
 
-    const register = async (username: string, phone: string, password: string, email?: string) => {
-        await api.register({ username, phone, password, email });
-        toast.success('Registration successful! Please login.');
+    const login = async (login: string, password: string): Promise<{ success: boolean; error?: string }> => {
+        if (!login || !password) {
+            const error = 'Заполните все поля';
+            toast.error(error);
+            return { success: false, error };
+        }
+
+        try {
+            const response = await api.login(login, password);
+
+            if (!response.token) {
+                const error = 'Не получен токен авторизации';
+                toast.error(error);
+                return { success: false, error };
+            }
+
+            api.setToken(response.token);
+            const userData = { username: login };
+            localStorage.setItem('user', JSON.stringify(userData));
+            setUser(userData);
+            toast.success(response.message || 'Добро пожаловать!');
+            return { success: true };
+        } catch (error: any) {
+            let errorMessage = 'Неверный логин или пароль';
+            if (error.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            }
+            toast.error(errorMessage);
+            return { success: false, error: errorMessage };
+        }
     };
 
     const logout = () => {
         api.clearToken();
         localStorage.removeItem('user');
         setUser(null);
-        toast.success('Logged out');
+        toast.success('Вы вышли из системы');
     };
 
     return (

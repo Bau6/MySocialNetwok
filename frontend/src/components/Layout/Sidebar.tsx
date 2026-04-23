@@ -51,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onSelectChat
 
     const loadUsers = async () => {
         try {
-            const data = await api.getAllUsers();
+            const data = await api.getUsers();
             // Simulate last message and unread count (in real app, get from API)
             const usersWithMeta = data.map((u: any) => ({
                 ...u,

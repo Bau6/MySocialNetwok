@@ -1,8 +1,8 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import toast from 'react-hot-toast';
-import { User, Message, LoginRequest, RegisterRequest, MessageRequest } from '../types';
+import { User, Message, RegisterRequest } from '../types';
 
-const API_URL = '/api'; // прокси на 8080
+const API_URL = '/api';
 
 class ApiClient {
     private api: AxiosInstance;
@@ -22,20 +22,24 @@ class ApiClient {
 
     private handleRequest(config: InternalAxiosRequestConfig) {
         const token = this.getToken();
-        if (token) config.headers.Authorization = `Bearer ${token}`;
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
     }
 
     private handleError(error: any) {
-        if (error.response?.status === 401 || error.response?.status === 403) {
+        // Не показываем тост для 401 ошибок входа, они обрабатываются отдельно
+        const isLoginRequest = error.config?.url?.includes('/auth/login');
+
+        if (error.response?.status === 401 && !isLoginRequest) {
             this.clearToken();
             window.location.href = '/login';
-            toast.error('Session expired. Please login again.');
-        } else if (error.response?.data?.message) {
-            toast.error(error.response.data.message);
-        } else {
-            toast.error('Network error');
+            toast.error('Сессия истекла. Пожалуйста, войдите снова.');
+            return Promise.reject(error);
         }
+
+        // Для остальных ошибок просто пробрасываем
         return Promise.reject(error);
     }
 
@@ -45,7 +49,9 @@ class ApiClient {
     }
 
     getToken(): string | null {
-        if (!this.token) this.token = localStorage.getItem('token');
+        if (!this.token) {
+            this.token = localStorage.getItem('token');
+        }
         return this.token;
     }
 
@@ -89,6 +95,23 @@ class ApiClient {
         const params = search ? { search } : {};
         const res = await this.api.get('/messages/users', { params });
         return res.data;
+    }
+
+    async getUserStatus(username: string): Promise<{ online: boolean; lastSeen: string }> {
+        try {
+            const res = await this.api.get(`/users/${username}/status`);
+            return res.data;
+        } catch (error) {
+            return { online: false, lastSeen: new Date().toISOString() };
+        }
+    }
+
+    async markMessagesAsRead(senderUsername: string): Promise<void> {
+        try {
+            await this.api.post(`/messages/mark-read/${senderUsername}`);
+        } catch (error) {
+            console.error('Failed to mark messages as read:', error);
+        }
     }
 }
 

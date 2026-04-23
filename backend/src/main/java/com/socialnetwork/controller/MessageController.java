@@ -5,12 +5,15 @@ import com.socialnetwork.dto.MessageResponse;
 import com.socialnetwork.service.MessageService;
 import com.socialnetwork.service.UserService;
 import lombok.RequiredArgsConstructor;
+import com.socialnetwork.model.User;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/messages")
@@ -60,16 +63,30 @@ public class MessageController {
     public ResponseEntity<?> getUsers(Authentication authentication,
                                       @RequestParam(required = false) String search) {
         String currentUser = authentication.getName();
-        List<com.socialnetwork.model.User> result;
+        List<User> result;
+
         if (search != null && !search.trim().isEmpty()) {
-            // поиск по телефону или логину (точное совпадение)
             result = userService.searchUsers(search.trim());
         } else {
-            // без поиска - только те, с кем есть чаты
             result = userService.getUsersWithChats(currentUser);
         }
-        // удаляем текущего пользователя из списка
-        result.removeIf(u -> u.getUsername().equals(currentUser));
-        return ResponseEntity.ok(result);
+
+        // ВАЖНО: Создаём изменяемую копию списка
+        List<User> filteredUsers = new ArrayList<>(result);
+
+        // Удаляем текущего пользователя
+        filteredUsers.removeIf(user -> user.getUsername().equals(currentUser));
+
+        return ResponseEntity.ok(filteredUsers);
+    }
+
+    @PostMapping("/mark-read/{senderUsername}")
+    public ResponseEntity<?> markMessagesAsRead(Authentication authentication,
+                                                @PathVariable String senderUsername) {
+        String currentUser = authentication.getName();
+        messageService.markMessagesAsRead(currentUser, senderUsername);
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Messages marked as read");
+        return ResponseEntity.ok(response);
     }
 }

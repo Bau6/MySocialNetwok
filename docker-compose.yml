@@ -6,6 +6,7 @@ services:
       POSTGRES_DB: social_network
       POSTGRES_USER: social_user
       POSTGRES_PASSWORD: social_pass
+      TZ: "Europe/Moscow"
     ports:
       - "5432:5432"
     volumes:
@@ -31,6 +32,8 @@ services:
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       JWT_SECRET: your-secret-key-change-it-in-production-please-make-it-long-enough-256-bits
       JWT_EXPIRATION: 86400000
+      TZ: "Europe/Moscow"
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBCTIMEZONE: Europe/Moscow
     ports:
       - "8080:8080"
     networks:
@@ -46,6 +49,7 @@ services:
       - backend
     environment:
       VITE_API_URL: http://localhost:8080/api
+      TZ: "Europe/Moscow"
     networks:
       - social_network_network
     restart: unless-stopped

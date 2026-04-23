@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -27,8 +28,13 @@ public class User {
     @JsonIgnore
     private String password;
 
-    // email не обязателен
     private String email;
+
+    @Column(name = "last_seen")
+    private LocalDateTime lastSeen;
+
+    @Column(name = "is_online")
+    private boolean isOnline = false;
 
     @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL)
     @JsonIgnore

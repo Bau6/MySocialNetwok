@@ -22,14 +22,13 @@ public class MessageService {
     private final ChatKeyRepository chatKeyRepository;
     private final UserService userService;
 
-    // Создание ключа для чата (при создании чата, например, когда пользователь нажимает "Написать")
     @Transactional
     public String createChatKey(String currentUsername, String otherUsername) {
         User user1 = userService.findByUsername(currentUsername);
         User user2 = userService.findByUsername(otherUsername);
-        // проверяем, существует ли уже ключ
-        return chatKeyRepository.findByUser1AndUser2(user1, user2)
-                .or(() -> chatKeyRepository.findByUser1AndUser2(user2, user1))
+
+        // Проверяем, существует ли уже ключ
+        return chatKeyRepository.findChatKeyBetweenUsers(user1, user2)
                 .map(ChatKey::getKeyValue)
                 .orElseGet(() -> {
                     String newKey = UUID.randomUUID().toString().replace("-", "") +
@@ -47,8 +46,7 @@ public class MessageService {
     public String getChatKey(String currentUsername, String otherUsername) {
         User user1 = userService.findByUsername(currentUsername);
         User user2 = userService.findByUsername(otherUsername);
-        return chatKeyRepository.findByUser1AndUser2(user1, user2)
-                .or(() -> chatKeyRepository.findByUser1AndUser2(user2, user1))
+        return chatKeyRepository.findChatKeyBetweenUsers(user1, user2)
                 .map(ChatKey::getKeyValue)
                 .orElse(null);
     }
@@ -58,10 +56,13 @@ public class MessageService {
         User sender = userService.findByUsername(senderUsername);
         User receiver = userService.findByUsername(request.getReceiverUsername());
 
-        // ключ должен существовать (должен быть создан заранее)
-        ChatKey chatKey = chatKeyRepository.findByUser1AndUser2(sender, receiver)
-                .or(() -> chatKeyRepository.findByUser1AndUser2(receiver, sender))
-                .orElseThrow(() -> new RuntimeException("Chat key not found. Please create chat first."));
+        // Автоматически создаем ключ чата, если его нет
+        String chatKeyValue = chatKeyRepository.findChatKeyBetweenUsers(sender, receiver)
+                .map(ChatKey::getKeyValue)
+                .orElseGet(() -> createChatKey(senderUsername, request.getReceiverUsername()));
+
+        ChatKey chatKey = chatKeyRepository.findByKeyValue(chatKeyValue)
+                .orElseThrow(() -> new RuntimeException("Chat key not found"));
 
         Message message = new Message();
         message.setSender(sender);
@@ -78,10 +79,13 @@ public class MessageService {
     public List<MessageResponse> getConversation(String username1, String username2) {
         User user1 = userService.findByUsername(username1);
         User user2 = userService.findByUsername(username2);
+
         List<Message> from1to2 = messageRepository.findBySenderAndReceiverOrderByTimestampAsc(user1, user2);
         List<Message> from2to1 = messageRepository.findBySenderAndReceiverOrderByTimestampAsc(user2, user1);
+
         from1to2.addAll(from2to1);
         from1to2.sort((m1, m2) -> m1.getTimestamp().compareTo(m2.getTimestamp()));
+
         return from1to2.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -96,5 +100,17 @@ public class MessageService {
         response.setTimestamp(message.getTimestamp());
         response.setRead(message.isRead());
         return response;
+    }
+
+    @Transactional
+    public void markMessagesAsRead(String currentUsername, String senderUsername) {
+        User currentUser = userService.findByUsername(currentUsername);
+        User sender = userService.findByUsername(senderUsername);
+
+        List<Message> unreadMessages = messageRepository.findBySenderAndReceiverAndReadFalse(sender, currentUser);
+        for (Message message : unreadMessages) {
+            message.setRead(true);
+        }
+        messageRepository.saveAll(unreadMessages);
     }
 }
