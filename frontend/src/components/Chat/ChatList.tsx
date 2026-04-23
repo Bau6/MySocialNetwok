@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/api';
 import { User, LogOut, Search, MessageCircle } from 'lucide-react';
@@ -27,6 +27,10 @@ export const ChatList: React.FC = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
 
+    // Для отслеживания уведомлений
+    const previousUnreadCounts = useRef<Map<number, number>>(new Map());
+    const notificationSoundPlayed = useRef<Set<string>>(new Set());
+
     // Загружаем чаты при монтировании и каждые 3 секунды
     useEffect(() => {
         loadChats();
@@ -36,16 +40,13 @@ export const ChatList: React.FC = () => {
 
     const loadChats = async () => {
         try {
-            // Получаем всех пользователей
             const data = await api.getUsers(searchTerm || undefined);
 
-            // Для каждого пользователя получаем последнее сообщение и счетчик
             const usersWithMeta = await Promise.all(
                 data.map(async (u: ChatUser) => {
                     try {
                         const conversation = await api.getConversation(u.username);
 
-                        // Получаем ключ для расшифровки
                         let chatKey = cryptoService.getChatKey(u.username);
                         if (!chatKey && conversation.length > 0) {
                             try {
@@ -55,7 +56,6 @@ export const ChatList: React.FC = () => {
                             } catch (e) {}
                         }
 
-                        // Получаем последнее сообщение
                         const lastMsg = conversation[conversation.length - 1];
                         let lastMessageDecrypted = '';
                         if (lastMsg && chatKey) {
@@ -69,12 +69,10 @@ export const ChatList: React.FC = () => {
                             }
                         }
 
-                        // Считаем непрочитанные (только где получатель - текущий пользователь)
                         const unreadCount = conversation.filter(msg =>
                             !msg.read && msg.receiverUsername === user?.username
                         ).length;
 
-                        // Получаем статус пользователя
                         const status = await api.getUserStatus(u.username);
 
                         return {
@@ -98,9 +96,44 @@ export const ChatList: React.FC = () => {
                 })
             );
 
-            // Сортируем: сначала с непрочитанными, потом онлайн, потом по времени
+            // Проверяем новые непрочитанные сообщения
+            usersWithMeta.forEach((user) => {
+                const previousCount = previousUnreadCounts.current.get(user.id) || 0;
+                const currentCount = user.unreadCount || 0;
+
+                // Если появилось новое непрочитанное сообщение
+                if (currentCount > previousCount) {
+                    const newMessagesCount = currentCount - previousCount;
+
+                    // Воспроизводим звук и показываем уведомление
+                    const notificationKey = `${user.id}_${Date.now()}`;
+                    if (!notificationSoundPlayed.current.has(notificationKey)) {
+                        notificationSoundPlayed.current.add(notificationKey);
+
+                        // Звук всегда
+                        playNotificationSound();
+
+                        // Показываем браузерное уведомление
+                        if (Notification.permission === 'granted') {
+                            new Notification(`Новое сообщение от ${user.username}`, {
+                                body: user.lastMessage || 'У вас новое сообщение',
+                                icon: '/vite.svg'
+                            });
+                        }
+
+                        // Удаляем ключ через 5 секунд, чтобы можно было показать следующее уведомление
+                        setTimeout(() => {
+                            notificationSoundPlayed.current.delete(notificationKey);
+                        }, 5000);
+                    }
+                }
+
+                // Обновляем счетчик
+                previousUnreadCounts.current.set(user.id, currentCount);
+            });
+
+            // Сортируем
             usersWithMeta.sort((a, b) => {
-                // Сначала с непрочитанными (только если > 0)
                 if ((a.unreadCount || 0) > 0 && (b.unreadCount || 0) === 0) return -1;
                 if ((a.unreadCount || 0) === 0 && (b.unreadCount || 0) > 0) return 1;
                 if (a.isOnline && !b.isOnline) return -1;
@@ -112,13 +145,6 @@ export const ChatList: React.FC = () => {
             });
 
             setUsers(usersWithMeta);
-
-            // Воспроизводим звук уведомления если есть новые сообщения
-            const hasNewMessages = usersWithMeta.some(u => u.unreadCount && u.unreadCount > 0);
-            if (hasNewMessages && document.hidden) {
-                playNotificationSound();
-            }
-
         } catch (error) {
             console.error('Error loading chats:', error);
         } finally {
@@ -130,20 +156,6 @@ export const ChatList: React.FC = () => {
         const audio = new Audio('/notification.mp3');
         audio.volume = 0.5;
         audio.play().catch(e => console.log('Audio play failed:', e));
-    };
-
-    const formatLastSeen = (lastSeen?: string) => {
-        if (!lastSeen) return 'Неизвестно';
-
-        const date = new Date(lastSeen);
-        const now = new Date();
-        const diffMinutes = differenceInMinutes(now, date);
-        const diffHours = differenceInHours(now, date);
-
-        if (diffMinutes < 1) return 'Только что';
-        if (diffMinutes < 60) return `${diffMinutes} мин. назад`;
-        if (diffHours < 24) return `${diffHours} ч. назад`;
-        return format(date, 'd MMM', { locale: ru });
     };
 
     const formatMessageTime = (timestamp?: string) => {
@@ -159,10 +171,15 @@ export const ChatList: React.FC = () => {
     };
 
     const handleChatOpen = async (otherUsername: string) => {
-        // Сброс счетчика непрочитанных при открытии чата
         setUsers(prev => prev.map(u =>
             u.username === otherUsername ? { ...u, unreadCount: 0 } : u
         ));
+
+        // Очищаем счетчик для этого пользователя
+        const userToReset = users.find(u => u.username === otherUsername);
+        if (userToReset) {
+            previousUnreadCounts.current.set(userToReset.id, 0);
+        }
 
         let key = cryptoService.getChatKey(otherUsername);
         if (!key) {
@@ -181,35 +198,11 @@ export const ChatList: React.FC = () => {
         navigate('/login');
     };
 
-    // Браузерные уведомления
+    // Запрос разрешения на уведомления
     useEffect(() => {
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
-
-        const handleNewMessage = (event: CustomEvent) => {
-            const { senderUsername, message } = event.detail;
-            if (document.hidden && Notification.permission === 'granted') {
-                new Notification(`Новое сообщение от ${senderUsername}`, {
-                    body: message,
-                    icon: '/vite.svg'
-                });
-            }
-            loadChats();
-        };
-
-        const handleMessagesRead = () => {
-            // Обновляем список чатов, чтобы убрать счетчик непрочитанных
-            loadChats();
-        };
-
-        window.addEventListener('newMessage', handleNewMessage as EventListener);
-        window.addEventListener('messagesRead', handleMessagesRead as EventListener);
-
-        return () => {
-            window.removeEventListener('newMessage', handleNewMessage as EventListener);
-            window.removeEventListener('messagesRead', handleMessagesRead as EventListener);
-        };
     }, []);
 
     const filteredUsers = users.filter(u =>
@@ -304,9 +297,6 @@ export const ChatList: React.FC = () => {
                                                 {u.lastMessage || 'Нет сообщений'}
                                             </p>
                                         </div>
-                                        {u.email && (
-                                            <p className="text-xs text-gray-400 mt-0.5">{u.phone}</p>
-                                        )}
                                     </div>
 
                                     {u.unreadCount && u.unreadCount > 0 && (
