@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: backend
+  datasource:
+    url: jdbc:postgresql://postgres:5432/social_network
+    username: social_user
+    password: social_pass
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: Europe/Moscow
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  jackson:
+    time-zone: Europe/Moscow
+
+server:
+  port: 8080
+
+jwt:
+  secret: your-secret-key-change-it-in-production-please-make-it-long-enough-256-bits-here
+  access-expiration: 900000  # 15 minutes
+  refresh-expiration: 604800000  # 7 days
+
+file:
+  upload-dir: ./uploads
+  max-file-size: 52428800  # 50MB
+  allowed-extensions: jpg,jpeg,png,gif,mp4,mp3,ogg
+
+logging:
+  level:
+    com.socialnetwork: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

@@ -1,123 +1,102 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api } from '../api/api';
-import toast from 'react-hot-toast';
-
-interface User {
-    username: string;
-}
+import { cryptoService, KeyStorage } from '../services/crypto';
+import { User } from '../types';
 
 interface AuthContextType {
     user: User | null;
-    isLoading: boolean;
+    loading: boolean;
     login: (login: string, password: string) => Promise<{ success: boolean; error?: string }>;
-    register: (username: string, phone: string, password: string, email?: string) => Promise<{ success: boolean; error?: string }>;
-    logout: () => void;
+    register: (username: string, phone: string, password: string, email?: string, fullName?: string) => Promise<{ success: boolean; error?: string }>;
+    logout: () => Promise<void>;
     isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (!context) throw new Error('useAuth must be used within AuthProvider');
-    return context;
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+    return ctx;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const token = api.getToken();
-        const savedUser = localStorage.getItem('user');
-        if (token && savedUser) {
-            try {
-                setUser(JSON.parse(savedUser));
-            } catch (e) {
-                console.error('Failed to parse user data', e);
-                localStorage.removeItem('user');
+        const init = async () => {
+            const storedPrivateKey = sessionStorage.getItem('private_key');
+            if (storedPrivateKey) {
+                const success = await cryptoService.importPrivateKey(storedPrivateKey);
+                if (success) {
+                    try {
+                        const userData = await api.getCurrentUser();
+                        setUser(userData);
+                        setLoading(false);
+                        return;
+                    } catch (err) {
+                        console.error('Failed to load user', err);
+                        sessionStorage.removeItem('private_key');
+                    }
+                }
             }
-        }
-        setIsLoading(false);
+            // No valid key, clear tokens
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            setLoading(false);
+        };
+        init();
     }, []);
 
-    const register = async (username: string, phone: string, password: string, email?: string): Promise<{ success: boolean; error?: string }> => {
-        // Фронтенд валидация
-        if (!username || username.trim().length < 3) {
-            const error = 'Имя пользователя должно содержать минимум 3 символа';
-            toast.error(error);
-            return { success: false, error };
-        }
-        if (!phone || !phone.match(/^\+?[0-9]{10,15}$/)) {
-            const error = 'Введите корректный номер телефона (например, +79991234567)';
-            toast.error(error);
-            return { success: false, error };
-        }
-        if (!password || password.length < 6) {
-            const error = 'Пароль должен содержать минимум 6 символов';
-            toast.error(error);
-            return { success: false, error };
-        }
-
-        try {
-            const response = await api.register({ username, phone, password, email });
-            toast.success(response.message || 'Регистрация успешна! Теперь войдите в систему.');
-            return { success: true };
-        } catch (error: any) {
-            let errorMessage = 'Ошибка регистрации';
-            if (error.response?.data?.error) {
-                errorMessage = error.response.data.error;
-            } else if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-            }
-            toast.error(errorMessage);
-            return { success: false, error: errorMessage };
-        }
-    };
-
-    const login = async (login: string, password: string): Promise<{ success: boolean; error?: string }> => {
-        if (!login || !password) {
-            const error = 'Заполните все поля';
-            toast.error(error);
-            return { success: false, error };
-        }
-
+    const login = async (login: string, password: string) => {
         try {
             const response = await api.login(login, password);
-
-            if (!response.token) {
-                const error = 'Не получен токен авторизации';
-                toast.error(error);
-                return { success: false, error };
+            const { encryptedPrivateKey } = response.user;
+            if (!encryptedPrivateKey) {
+                throw new Error('No encrypted private key for this user');
             }
-
-            api.setToken(response.token);
-            const userData = { username: login };
-            localStorage.setItem('user', JSON.stringify(userData));
-            setUser(userData);
-            toast.success(response.message || 'Добро пожаловать!');
+            const success = await cryptoService.loadPrivateKey(encryptedPrivateKey, password);
+            if (!success) {
+                return { success: false, error: 'Не удалось расшифровать ключ. Неверный пароль.' };
+            }
+            const exportedKey = await cryptoService.exportPrivateKey();
+            if (exportedKey) {
+                sessionStorage.setItem('private_key', exportedKey);
+            }
+            setUser(response.user);
             return { success: true };
         } catch (error: any) {
-            let errorMessage = 'Неверный логин или пароль';
-            if (error.response?.data?.error) {
-                errorMessage = error.response.data.error;
-            } else if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-            }
-            toast.error(errorMessage);
-            return { success: false, error: errorMessage };
+            return { success: false, error: error.response?.data?.message || 'Ошибка входа' };
         }
     };
 
-    const logout = () => {
-        api.clearToken();
-        localStorage.removeItem('user');
-        setUser(null);
-        toast.success('Вы вышли из системы');
+    const register = async (username: string, phone: string, password: string, email?: string, fullName?: string) => {
+        try {
+            const { privateKey, publicKey } = await cryptoService.generateKeyPair();
+            const encryptedPrivateKey = await cryptoService.encryptPrivateKeyWithPassword(privateKey, password);
+            await api.register({ username, phone, password, email, fullName, publicKey, encryptedPrivateKey });
+            return { success: true };
+        } catch (error: any) {
+            console.error('Registration error:', error);
+            return { success: false, error: error.response?.data?.message || 'Ошибка регистрации' };
+        }
+    };
+
+    const logout = async () => {
+        try {
+            await api.logout();
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            api.clearTokens();
+            sessionStorage.removeItem('private_key');
+            setUser(null);
+        }
     };
 
     return (
-        <AuthContext.Provider value={{ user, isLoading, login, register, logout, isAuthenticated: !!user }}>
+        <AuthContext.Provider value={{ user, loading, login, register, logout, isAuthenticated: !!user }}>
             {children}
         </AuthContext.Provider>
     );

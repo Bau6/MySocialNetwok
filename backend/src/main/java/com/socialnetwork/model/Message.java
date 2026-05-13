@@ -24,14 +24,37 @@ public class Message {
     @JoinColumn(name = "receiver_id", nullable = false)
     private User receiver;
 
+    // Для получателя (зашифровано публичным ключом получателя)
     @Column(nullable = false, columnDefinition = "TEXT")
     private String encryptedContent;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String encryptedSessionKey;
+
+    @Column(nullable = false)
+    private String iv;
+
+    // Для отправителя (зашифровано публичным ключом отправителя)
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String encryptedContentForSender;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String encryptedSessionKeyForSender;
+
+    @Column(nullable = false)
+    private String ivForSender;
 
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
     private boolean read;
 
-    @Column(name = "chat_key_id", nullable = false)
-    private Long chatKeyId;
+    @Enumerated(EnumType.STRING)
+    private MessageType type = MessageType.TEXT;
+
+    private String fileUrl;
+    private String fileName;
+    private Long fileSize;
+
+    private Long replyToId;
 }

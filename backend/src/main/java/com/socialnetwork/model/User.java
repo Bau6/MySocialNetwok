@@ -4,9 +4,9 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -24,23 +24,32 @@ public class User {
     @Column(unique = true, nullable = false)
     private String phone;
 
-    @Column(nullable = false)
-    @JsonIgnore
-    private String password;
-
+    @Column(unique = true)
     private String email;
 
-    @Column(name = "last_seen")
+    private String fullName;
+
+    @Column(nullable = false)
+    private String passwordHash;
+
+    @Column(columnDefinition = "TEXT")
+    private String publicKey;
+
+    @Column(columnDefinition = "TEXT")
+    private String encryptedPrivateKey;   // зашифрованный паролем приватный ключ
+
+    private String avatarUrl;
+    private boolean online;
     private LocalDateTime lastSeen;
 
-    @Column(name = "is_online")
-    private boolean isOnline = false;
+    @Column(nullable = false)
+    private LocalDateTime createdAt;
 
-    @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL)
-    @JsonIgnore
-    private List<Message> sentMessages;
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Set<OneTimePreKey> oneTimePreKeys = new HashSet<>();
 
-    @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL)
-    @JsonIgnore
-    private List<Message> receivedMessages;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "role")
+    private Set<String> roles = new HashSet<>();
 }

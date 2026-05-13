@@ -30,12 +30,15 @@ services:
       SPRING_DATASOURCE_USERNAME: social_user
       SPRING_DATASOURCE_PASSWORD: social_pass
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      JWT_SECRET: your-secret-key-change-it-in-production-please-make-it-long-enough-256-bits
-      JWT_EXPIRATION: 86400000
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-it-in-production-please-make-it-long-enough-256-bits-here}
+      JWT_ACCESS_EXPIRATION: 900000
+      JWT_REFRESH_EXPIRATION: 604800000
       TZ: "Europe/Moscow"
-      SPRING_JPA_PROPERTIES_HIBERNATE_JDBCTIMEZONE: Europe/Moscow
+      FILE_UPLOAD_DIR: /app/uploads
     ports:
       - "8080:8080"
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - social_network_network
     restart: unless-stopped
@@ -48,7 +51,8 @@ services:
     depends_on:
       - backend
     environment:
-      VITE_API_URL: http://localhost:8080/api
+      VITE_API_URL: http://backend:8080/api
+      VITE_WS_URL: ws://backend:8080/ws
       TZ: "Europe/Moscow"
     networks:
       - social_network_network
@@ -60,3 +64,4 @@ networks:
 
 volumes:
   postgres_data:
+  uploads_data:

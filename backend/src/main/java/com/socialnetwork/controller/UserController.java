@@ -1,50 +1,61 @@
 package com.socialnetwork.controller;
 
-import com.socialnetwork.model.User;
+import com.socialnetwork.dto.response.UserResponse;
 import com.socialnetwork.service.UserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class UserController {
+
     private final UserService userService;
 
+    @GetMapping("/profile")
+    public ResponseEntity<UserResponse> getProfile(Authentication authentication) {
+        String username = authentication.getName();
+        return ResponseEntity.ok(new UserResponse(userService.findByUsername(username)));
+    }
+
+    @GetMapping("/{username}")
+    public ResponseEntity<UserResponse> getUser(@PathVariable String username) {
+        return ResponseEntity.ok(new UserResponse(userService.findByUsername(username)));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<UserResponse>> searchUsers(@RequestParam String query) {
+        return ResponseEntity.ok(userService.searchUsers(query));
+    }
+
     @GetMapping("/{username}/status")
-    public ResponseEntity<?> getUserStatus(@PathVariable String username) {
-        try {
-            boolean isOnline = userService.isUserOnline(username);
-            Map<String, Object> response = new HashMap<>();
-            response.put("online", isOnline);
+    public ResponseEntity<Map<String, Object>> getUserStatus(@PathVariable String username) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("online", userService.isUserOnline(username));
+        response.put("lastSeen", userService.findByUsername(username).getLastSeen());
+        return ResponseEntity.ok(response);
+    }
 
-            // Получаем пользователя для lastSeen
-            try {
-                User user = userService.findByUsername(username);
-                if (user.getLastSeen() != null) {
-                    response.put("lastSeen", user.getLastSeen().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-                } else {
-                    response.put("lastSeen", null);
-                }
-            } catch (IllegalArgumentException e) {
-                response.put("lastSeen", null);
-            }
+    @GetMapping("/{username}/public-key")
+    public ResponseEntity<Map<String, String>> getUserPublicKey(@PathVariable String username) {
+        String publicKey = userService.getPublicKey(username);
+        Map<String, String> response = new HashMap<>();
+        response.put("publicKey", publicKey);
+        return ResponseEntity.ok(response);
+    }
 
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("message", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
-        } catch (Exception e) {
-            Map<String, String> error = new HashMap<>();
-            error.put("message", "Failed to get user status");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-        }
+    @GetMapping("/with-keys")
+    public ResponseEntity<List<UserResponse>> getAllUsersWithPublicKeys(Authentication authentication) {
+        return ResponseEntity.ok(userService.getAllUsersWithPublicKeys(authentication.getName()));
+    }
+
+    @GetMapping("/chats")
+    public ResponseEntity<List<UserResponse>> getUserChats(Authentication authentication) {
+        return ResponseEntity.ok(userService.getChatUsers(authentication.getName()));
     }
 }
