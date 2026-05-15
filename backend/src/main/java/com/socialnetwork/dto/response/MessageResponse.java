@@ -10,12 +10,10 @@ public class MessageResponse {
     private String senderUsername;
     private String receiverUsername;
 
-    // Для получателя
     private String encryptedContent;
     private String encryptedSessionKey;
     private String iv;
 
-    // Для отправителя
     private String encryptedContentForSender;
     private String encryptedSessionKeyForSender;
     private String ivForSender;
@@ -27,4 +25,7 @@ public class MessageResponse {
     private String fileName;
     private Long fileSize;
     private Long replyToId;
+
+    // Новое поле
+    private boolean circle;
 }

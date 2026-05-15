@@ -1,5 +1,3 @@
-// src/types/index.ts
-
 export interface User {
     id: number;
     username: string;
@@ -26,6 +24,7 @@ export interface Message {
     timestamp: string;
     read: boolean;
     type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'VOICE';
+    circle?: boolean;
     fileUrl?: string;
     fileName?: string;
     fileSize?: number;
@@ -41,6 +40,7 @@ export interface SendMessageData {
     encryptedSessionKeyForSender?: string;
     ivForSender?: string;
     type?: string;
+    circle?: boolean;
     fileUrl?: string;
     fileName?: string;
     fileSize?: number;
@@ -80,6 +80,7 @@ export interface ChatPreviewResponse {
     lastMessageEncryptedSessionKey: string;
     lastMessageTime: string;
     unreadCount: number;
+    lastMessageType: string;
 }
 
 export interface PageResponse<T> {

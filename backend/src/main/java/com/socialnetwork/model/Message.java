@@ -24,7 +24,6 @@ public class Message {
     @JoinColumn(name = "receiver_id", nullable = false)
     private User receiver;
 
-    // Для получателя (зашифровано публичным ключом получателя)
     @Column(nullable = false, columnDefinition = "TEXT")
     private String encryptedContent;
 
@@ -34,7 +33,6 @@ public class Message {
     @Column(nullable = false)
     private String iv;
 
-    // Для отправителя (зашифровано публичным ключом отправителя)
     @Column(nullable = false, columnDefinition = "TEXT")
     private String encryptedContentForSender;
 
@@ -57,4 +55,7 @@ public class Message {
     private Long fileSize;
 
     private Long replyToId;
+
+    // Новое поле для видео-кружочков
+    private boolean circle;
 }

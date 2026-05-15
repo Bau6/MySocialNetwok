@@ -16,7 +16,7 @@ public class FileStorageConfig {
 
     private String uploadDir = "./uploads";
     private long maxFileSize = 52428800; // 50MB
-    private String allowedExtensions = "jpg,jpeg,png,gif,mp4,mp3,ogg";
+    private String allowedExtensions = "jpg,jpeg,png,gif,mp4,mp3,ogg,webm";
 
     public Path getUploadPath() {
         return Paths.get(uploadDir).toAbsolutePath().normalize();

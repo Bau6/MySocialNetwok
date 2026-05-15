@@ -1,4 +1,3 @@
-// src/services/crypto.ts
 export interface StoredKeys {
     privateKey: string;
     publicKey: string;
@@ -24,6 +23,7 @@ class CryptoService {
         return CryptoService.instance;
     }
 
+    // ========== KEY MANAGEMENT ==========
     async generateKeyPair(): Promise<StoredKeys> {
         const keyPair = await window.crypto.subtle.generateKey(
             {
@@ -38,13 +38,11 @@ class CryptoService {
 
         const publicKeyRaw = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
         const publicKey = this.arrayBufferToBase64(publicKeyRaw);
-
         const privateKeyRaw = await window.crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
         const privateKey = this.arrayBufferToBase64(privateKeyRaw);
 
         this.currentPrivateKey = keyPair.privateKey;
         this.currentPublicKey = keyPair.publicKey;
-
         return { privateKey, publicKey };
     }
 
@@ -94,6 +92,7 @@ class CryptoService {
         return this.encryptWithPassword(privateKeyBase64, password);
     }
 
+    // ========== TEXT ENCRYPTION ==========
     async encryptForUser(plainText: string, recipientPublicKeyBase64: string): Promise<EncryptedPackage> {
         const recipientPublicKey = await window.crypto.subtle.importKey(
             "spki",
@@ -133,9 +132,7 @@ class CryptoService {
     }
 
     async decryptFromUser(encryptedPackage: EncryptedPackage): Promise<string> {
-        if (!this.currentPrivateKey) {
-            throw new Error("Private key not loaded");
-        }
+        if (!this.currentPrivateKey) throw new Error("Private key not loaded");
 
         const encryptedSessionKey = this.base64ToArrayBuffer(encryptedPackage.encryptedSessionKey);
         const sessionKeyRaw = await window.crypto.subtle.decrypt(
@@ -160,10 +157,61 @@ class CryptoService {
             encryptedContent
         );
 
-        const decoder = new TextDecoder();
-        return decoder.decode(decryptedData);
+        return new TextDecoder().decode(decryptedData);
     }
 
+    // ========== FILE ENCRYPTION (added) ==========
+    async generateFileKey(): Promise<CryptoKey> {
+        return await window.crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+    }
+
+    async encryptSessionKey(fileKey: CryptoKey, recipientPublicKeyBase64: string): Promise<{ encryptedSessionKey: string; iv: string }> {
+        const recipientPublicKey = await window.crypto.subtle.importKey(
+            "spki",
+            this.base64ToArrayBuffer(recipientPublicKeyBase64),
+            { name: "RSA-OAEP", hash: "SHA-256" },
+            false,
+            ["encrypt"]
+        );
+        const rawKey = await window.crypto.subtle.exportKey("raw", fileKey);
+        const encrypted = await window.crypto.subtle.encrypt({ name: "RSA-OAEP" }, recipientPublicKey, rawKey);
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        return {
+            encryptedSessionKey: this.arrayBufferToBase64(encrypted),
+            iv: this.arrayBufferToBase64(iv.buffer),
+        };
+    }
+
+    async encryptBlob(blob: Blob, key: CryptoKey): Promise<Blob> {
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const data = await blob.arrayBuffer();
+        const encrypted = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+        const combined = new Uint8Array(iv.length + encrypted.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(encrypted), iv.length);
+        return new Blob([combined], { type: blob.type });
+    }
+
+    async decryptBlob(encryptedBlob: Blob, key: CryptoKey): Promise<Blob> {
+        const buffer = await encryptedBlob.arrayBuffer();
+        const iv = new Uint8Array(buffer.slice(0, 12));
+        const data = buffer.slice(12);
+        const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
+        return new Blob([decrypted], { type: "audio/webm" });
+    }
+
+    async decryptSessionKey(encryptedSessionKeyBase64: string, ivBase64: string): Promise<CryptoKey> {
+        const encrypted = this.base64ToArrayBuffer(encryptedSessionKeyBase64);
+        const iv = this.base64ToArrayBuffer(ivBase64);
+        const rawKey = await window.crypto.subtle.decrypt({ name: 'RSA-OAEP' }, this.currentPrivateKey!, encrypted);
+        return await window.crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    }
+
+    // ========== PASSWORD-BASED ENCRYPTION ==========
     private async encryptWithPassword(data: string, password: string): Promise<string> {
         const encoder = new TextEncoder();
         const passwordData = encoder.encode(password);
@@ -242,17 +290,17 @@ class CryptoService {
             data.buffer
         );
 
-        const decoder = new TextDecoder();
-        return decoder.decode(decrypted);
+        return new TextDecoder().decode(decrypted);
     }
 
     isReady(): boolean {
         return this.currentPrivateKey !== null;
     }
 
+    // ========== UTILITIES ==========
     private arrayBufferToBase64(buffer: ArrayBuffer): string {
         const bytes = new Uint8Array(buffer);
-        let binary = '';
+        let binary = "";
         for (let i = 0; i < bytes.byteLength; i++) {
             binary += String.fromCharCode(bytes[i]);
         }
@@ -272,8 +320,8 @@ class CryptoService {
 export const cryptoService = CryptoService.getInstance();
 
 const STORAGE_KEYS = {
-    ENCRYPTED_PRIVATE_KEY: 'encrypted_private_key',
-    PUBLIC_KEY: 'public_key'
+    ENCRYPTED_PRIVATE_KEY: "encrypted_private_key",
+    PUBLIC_KEY: "public_key"
 };
 
 export class KeyStorage {

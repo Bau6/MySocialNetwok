@@ -4,6 +4,10 @@
 # Зависимости фронтенда
 frontend/node_modules/
 
+# Зависимости бэкенда (если есть)
+backend/node_modules/
+node_modules/
+
 # Файлы сборки
 dist/
 build/

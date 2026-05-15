@@ -55,6 +55,7 @@ public class MessageService {
         message.setFileName(request.getFileName());
         message.setFileSize(request.getFileSize());
         message.setReplyToId(request.getReplyToId());
+        message.setCircle(request.getCircle() != null && request.getCircle());
 
         Message saved = messageRepository.save(message);
         return mapToResponse(saved);
@@ -126,6 +127,7 @@ public class MessageService {
                 response.setLastMessageEncrypted(lastMsg.getEncryptedContent());
                 response.setLastMessageEncryptedSessionKey(lastMsg.getEncryptedSessionKey());
                 response.setLastMessageIv(lastMsg.getIv());
+                response.setLastMessageType(lastMsg.getType().getValue());
             }
             response.setLastMessageTime(lastMsg.getTimestamp());
             response.setUnreadCount(unreadCount);
@@ -154,6 +156,7 @@ public class MessageService {
         response.setFileName(message.getFileName());
         response.setFileSize(message.getFileSize());
         response.setReplyToId(message.getReplyToId());
+        response.setCircle(message.isCircle());
         return response;
     }
 }

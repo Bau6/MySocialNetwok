@@ -15,4 +15,5 @@ public class ChatPreviewResponse {
     private String lastMessageEncryptedSessionKey;
     private LocalDateTime lastMessageTime;
     private long unreadCount;
+    private String lastMessageType;
 }

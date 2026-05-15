@@ -9,3 +9,37 @@
 .message-enter {
     animation: slideIn 0.2s ease-out;
 }
+
+@keyframes voiceWave1 {
+    0%, 100% { height: 4px; }
+    50% { height: 12px; }
+}
+@keyframes voiceWave2 {
+    0%, 100% { height: 8px; }
+    50% { height: 16px; }
+}
+@keyframes voiceWave3 {
+    0%, 100% { height: 12px; }
+    50% { height: 20px; }
+}
+.animate-wave1 { animation: voiceWave1 0.8s ease-in-out infinite; }
+.animate-wave2 { animation: voiceWave2 0.8s ease-in-out infinite; }
+.animate-wave3 { animation: voiceWave3 0.8s ease-in-out infinite; }
+
+input[type="range"] {
+    -webkit-appearance: none;
+    background: #e5e7eb;
+    border-radius: 9999px;
+    height: 4px;
+}
+input[type="range"]:focus {
+    outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #4f46e5;
+    border-radius: 50%;
+    cursor: pointer;
+}

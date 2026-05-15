@@ -34,7 +34,7 @@ jwt:
 file:
   upload-dir: ./uploads
   max-file-size: 52428800  # 50MB
-  allowed-extensions: jpg,jpeg,png,gif,mp4,mp3,ogg
+  allowed-extensions: jpg,jpeg,png,gif,mp4,mp3,ogg,webm
 
 logging:
   level:

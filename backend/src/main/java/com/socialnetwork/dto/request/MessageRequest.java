@@ -9,16 +9,12 @@ public class MessageRequest {
     @NotBlank(message = "Receiver username is required")
     private String receiverUsername;
 
-    @NotBlank(message = "Encrypted content is required")
+    private String senderUsername;   // новое поле
+
     private String encryptedContent;
-
-    @NotBlank(message = "Encrypted session key is required")
     private String encryptedSessionKey;
-
-    @NotBlank(message = "IV is required")
     private String iv;
 
-    // Для отправителя
     private String encryptedContentForSender;
     private String encryptedSessionKeyForSender;
     private String ivForSender;
@@ -28,4 +24,5 @@ public class MessageRequest {
     private String fileName;
     private Long fileSize;
     private Long replyToId;
+    private Boolean circle;
 }
